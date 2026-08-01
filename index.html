@@ -7,6 +7,8 @@
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body style="margin:0;">
 <div id="root"></div>
@@ -65,8 +67,32 @@ function Line({ value, onChange, className, placeholder, bold }) {
 function InvoiceTemplate() {
   const [data, setData] = useState(DEFAULTS);
   const [status, setStatus] = useState("");
+  const [exporting, setExporting] = useState(false);
   const loaded = useRef(false);
   const saveTimer = useRef(null);
+  const sheetRef = useRef(null);
+
+  const exportPDF = async () => {
+    const node = sheetRef.current;
+    if (!node || !window.html2canvas || !window.jspdf) return;
+    setExporting(true);
+    // let the exporting class hide edit-only controls before capture
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    try {
+      const canvas = await window.html2canvas(node, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: "pt", format: [612, 792] });
+      pdf.addImage(imgData, "PNG", 0, 0, 612, 792);
+      pdf.save(`invoice-${data.invoiceNumber || "export"}.pdf`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -299,16 +325,27 @@ function InvoiceTemplate() {
             background: transparent; box-shadow: none;
           }
         }
+
+        .sheet.exporting .del,
+        .sheet.exporting .add-row {
+          display: none !important;
+        }
+        .sheet.exporting input:hover, .sheet.exporting textarea:hover,
+        .sheet.exporting input:focus, .sheet.exporting textarea:focus {
+          background: transparent; box-shadow: none;
+        }
       `}</style>
 
       <div className="toolbar">
-        <button onClick={() => window.print()}>Print / Save as PDF</button>
+        <button onClick={exportPDF} disabled={exporting}>
+          {exporting ? "Preparing PDF…" : "Download PDF"}
+        </button>
         <button className="secondary" onClick={addField}>+ Add line</button>
         <button className="secondary" onClick={() => setData(DEFAULTS)}>Reset to defaults</button>
         <span className="status">{status}</span>
       </div>
 
-      <div className="sheet">
+      <div className={`sheet${exporting ? " exporting" : ""}`} ref={sheetRef}>
         <img className="logo" src={LOGO_SRC} alt="Jared Michael Siskin Photography" />
 
         <div className="sender">
