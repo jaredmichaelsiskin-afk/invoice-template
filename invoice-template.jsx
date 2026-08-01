@@ -214,7 +214,7 @@ export default function InvoiceTemplate() {
           position: absolute;
           left: 83pt;
           top: 147pt;
-          width: 443pt;
+          width: 452pt;
           height: 5pt;
           background: #030405;
         }
