@@ -21,6 +21,7 @@ const LOGO_SRC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlAAAACWCAIAAACe
 const DEFAULTS = {
   senderName: "Jared Michael Siskin",
   senderAddress: "5 Ash CT, Bayville\nNY, 11709",
+  invoiceLabel: "INVOICE:",
   invoiceNumber: "007",
   client: "Morgan Stanley",
   invoiceDate: "07.08.2026",
@@ -504,7 +505,8 @@ function InvoiceTemplate() {
         <div className="tick" />
         <div className="inv-row">
           <span className="inv-group">
-            <b>INVOICE: </b>
+            <Line value={data.invoiceLabel} onChange={(v) => set("invoiceLabel", v)} bold />
+            <span> </span>
             <Line value={data.invoiceNumber} onChange={(v) => set("invoiceNumber", v)} />
           </span>
           <span className="inv-group">
