@@ -201,14 +201,15 @@ export default function InvoiceTemplate() {
           position: absolute;
           left: 110pt;
           top: 132.5pt;
+          width: 416pt;
           display: flex;
+          justify-content: space-between;
           align-items: baseline;
           font-size: 10pt;
           color: #231f20;
-          white-space: pre;
         }
         .inv-row b { font-weight: 700; }
-        .inv-row .sp { display: inline-block; width: 14pt; }
+        .inv-row .inv-group { white-space: pre; display: inline-flex; align-items: baseline; }
         .bar {
           position: absolute;
           left: 83pt;
@@ -301,14 +302,18 @@ export default function InvoiceTemplate() {
 
         <div className="tick" />
         <div className="inv-row">
-          <b>INVOICE: </b>
-          <Line value={data.invoiceNumber} onChange={(v) => set("invoiceNumber", v)} />
-          <span className="sp" />
-          <b>CLIENT: </b>
-          <Line value={data.client} onChange={(v) => set("client", v)} />
-          <span className="sp" />
-          <b>DATE: </b>
-          <Line value={data.invoiceDate} onChange={(v) => set("invoiceDate", v)} />
+          <span className="inv-group">
+            <b>INVOICE: </b>
+            <Line value={data.invoiceNumber} onChange={(v) => set("invoiceNumber", v)} />
+          </span>
+          <span className="inv-group">
+            <b>CLIENT: </b>
+            <Line value={data.client} onChange={(v) => set("client", v)} />
+          </span>
+          <span className="inv-group">
+            <b>DATE: </b>
+            <Line value={data.invoiceDate} onChange={(v) => set("invoiceDate", v)} />
+          </span>
         </div>
         <div className="bar" />
 
