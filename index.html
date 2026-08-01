@@ -32,9 +32,12 @@ const DEFAULTS = {
     { id: "f5", label: "DISCOUNT:", value: "-150.00" },
   ],
   total: "4100.00",
+  pages: [],
 };
 
 const STORAGE_KEY = "invoice-template:data";
+const PAGE_W = 612;
+const PAGE_H = 792;
 
 // Local-storage-backed shim so the component works standalone in any browser
 const storage = {
@@ -71,24 +74,96 @@ function InvoiceTemplate() {
   const loaded = useRef(false);
   const saveTimer = useRef(null);
   const sheetRef = useRef(null);
+  const pageRefs = useRef({});
+  const imageInputRef = useRef(null);
+  const pendingPageId = useRef(null);
+
+  const addPage = () =>
+    setData((d) => ({
+      ...d,
+      pages: [...(d.pages || []), { id: "page" + Date.now(), images: [] }],
+    }));
+
+  const removePage = (pageId) =>
+    setData((d) => ({ ...d, pages: (d.pages || []).filter((p) => p.id !== pageId) }));
+
+  const triggerAddImage = (pageId) => {
+    pendingPageId.current = pageId;
+    imageInputRef.current?.click();
+  };
+
+  const handleFilesSelected = (e) => {
+    const files = Array.from(e.target.files || []);
+    const pageId = pendingPageId.current;
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setData((d) => ({
+          ...d,
+          pages: (d.pages || []).map((p) =>
+            p.id === pageId
+              ? { ...p, images: [...p.images, { id: "img" + Date.now() + Math.random(), src: reader.result }] }
+              : p
+          ),
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  };
+
+  const removeImage = (pageId, imgId) =>
+    setData((d) => ({
+      ...d,
+      pages: (d.pages || []).map((p) =>
+        p.id === pageId ? { ...p, images: p.images.filter((im) => im.id !== imgId) } : p
+      ),
+    }));
 
   const exportPDF = async () => {
-    const node = sheetRef.current;
-    if (!node || !window.html2canvas || !window.jspdf) return;
+    if (!window.html2canvas || !window.jspdf) return;
     setExporting(true);
     // let the exporting class hide edit-only controls before capture
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     try {
-      const canvas = await window.html2canvas(node, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-      });
-      const imgData = canvas.toDataURL("image/png");
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ unit: "pt", format: [612, 792] });
-      pdf.addImage(imgData, "PNG", 0, 0, 612, 792);
-      pdf.save(`invoice-${data.invoiceNumber || "export"}.pdf`);
+      const pdf = new jsPDF({ unit: "pt", format: [PAGE_W, PAGE_H] });
+      const nodes = [sheetRef.current, ...(data.pages || []).map((p) => pageRefs.current[p.id])].filter(Boolean);
+
+      for (let i = 0; i < nodes.length; i++) {
+        const canvas = await window.html2canvas(nodes[i], {
+          scale: 2,
+          backgroundColor: "#ffffff",
+          useCORS: true,
+        });
+        const imgData = canvas.toDataURL("image/png");
+        if (i > 0) pdf.addPage([PAGE_W, PAGE_H]);
+        pdf.addImage(imgData, "PNG", 0, 0, PAGE_W, PAGE_H);
+      }
+
+      const suggestedName = `invoice-${data.invoiceNumber || "export"}.pdf`;
+
+      if (window.showSaveFilePicker) {
+        // Native "Save As" dialog so the file can be named/located before writing
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName,
+            types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }],
+          });
+          const blob = pdf.output("blob");
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } catch (err) {
+          if (err && err.name !== "AbortError") {
+            // picker unsupported/blocked mid-flow — fall back to a normal download
+            pdf.save(suggestedName);
+          }
+        }
+      } else {
+        // Browser without File System Access API support (e.g. Safari, Firefox)
+        pdf.save(suggestedName);
+      }
     } finally {
       setExporting(false);
     }
@@ -317,9 +392,63 @@ function InvoiceTemplate() {
         }
         .total-row .amount input { color: #ed2024; font-weight: 700; }
 
+        .page-block {
+          width: 612pt;
+          max-width: 100%;
+          margin: 24pt auto 0;
+        }
+        .page-toolbar {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 8pt;
+        }
+        .page-toolbar button {
+          font: 600 12px Helvetica, Arial, sans-serif;
+          padding: 6px 12px;
+          border: 1px solid #1a1a1a;
+          background: transparent;
+          color: #1a1a1a;
+          cursor: pointer;
+          border-radius: 3px;
+        }
+        .page-toolbar button:hover { opacity: 0.75; }
+        .blank-page {
+          padding: 24pt;
+          display: flex;
+          flex-direction: column;
+          gap: 12pt;
+          align-items: stretch;
+        }
+        .page-image-wrap { position: relative; width: 100%; flex-shrink: 0; }
+        .page-image { width: 100%; height: auto; display: block; }
+        .del-image {
+          position: absolute;
+          top: 6pt;
+          right: 6pt;
+          border: none;
+          background: rgba(0,0,0,0.6);
+          color: #fff;
+          border-radius: 50%;
+          width: 20pt;
+          height: 20pt;
+          line-height: 20pt;
+          text-align: center;
+          cursor: pointer;
+          opacity: 0;
+          transition: opacity .15s;
+          padding: 0;
+        }
+        .page-image-wrap:hover .del-image { opacity: 1; }
+        .empty-page-hint {
+          color: #999;
+          font-size: 11pt;
+          text-align: center;
+          padding: 48pt 0;
+        }
+
         @media print {
           .app { background: #fff; padding: 0; }
-          .toolbar, .del, .add-row { display: none !important; }
+          .toolbar, .page-toolbar, .del, .add-row { display: none !important; }
           .sheet { box-shadow: none; }
           input:hover, textarea:hover, input:focus, textarea:focus {
             background: transparent; box-shadow: none;
@@ -327,7 +456,9 @@ function InvoiceTemplate() {
         }
 
         .sheet.exporting .del,
-        .sheet.exporting .add-row {
+        .sheet.exporting .add-row,
+        .sheet.exporting .del-image,
+        .sheet.exporting .empty-page-hint {
           display: none !important;
         }
         .sheet.exporting input:hover, .sheet.exporting textarea:hover,
@@ -336,11 +467,21 @@ function InvoiceTemplate() {
         }
       `}</style>
 
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={handleFilesSelected}
+      />
+
       <div className="toolbar">
         <button onClick={exportPDF} disabled={exporting}>
           {exporting ? "Preparing PDF…" : "Download PDF"}
         </button>
         <button className="secondary" onClick={addField}>+ Add line</button>
+        <button className="secondary" onClick={addPage}>+ Add page</button>
         <button className="secondary" onClick={() => setData(DEFAULTS)}>Reset to defaults</button>
         <span className="status">{status}</span>
       </div>
@@ -403,6 +544,29 @@ function InvoiceTemplate() {
           </span>
         </div>
       </div>
+
+      {(data.pages || []).map((page) => (
+        <div className="page-block" key={page.id}>
+          <div className="page-toolbar">
+            <button className="secondary" onClick={() => triggerAddImage(page.id)}>+ Add image</button>
+            <button className="secondary" onClick={() => removePage(page.id)}>Remove page</button>
+          </div>
+          <div
+            className={`sheet blank-page${exporting ? " exporting" : ""}`}
+            ref={(el) => (pageRefs.current[page.id] = el)}
+          >
+            {page.images.length === 0 && (
+              <div className="empty-page-hint">Add images with the button above</div>
+            )}
+            {page.images.map((img) => (
+              <div className="page-image-wrap" key={img.id}>
+                <img className="page-image" src={img.src} alt="" />
+                <button className="del-image" title="Remove image" onClick={() => removeImage(page.id, img.id)}>✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
