@@ -292,6 +292,7 @@ function InvoiceTemplate() {
           padding: 0 1pt;
           margin: 0 -1pt;
         }
+        .grow-wrap.tight::after { content: attr(data-value); }
         .grow-wrap input { grid-area: 1 / 1; width: 100%; min-width: 16pt; }
 
         .logo {
@@ -505,7 +506,7 @@ function InvoiceTemplate() {
         <div className="tick" />
         <div className="inv-row">
           <span className="inv-group">
-            <Line value={data.invoiceLabel} onChange={(v) => set("invoiceLabel", v)} bold />
+            <Line value={data.invoiceLabel} onChange={(v) => set("invoiceLabel", v)} bold className="tight" />
             <span> </span>
             <Line value={data.invoiceNumber} onChange={(v) => set("invoiceNumber", v)} />
           </span>
