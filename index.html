@@ -328,9 +328,9 @@ function InvoiceTemplate() {
           left: 110pt;
           top: 132.5pt;
           width: 416pt;
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          display: flex;
           align-items: baseline;
+          column-gap: 18pt;
           font-size: 10pt;
           color: #231f20;
         }
@@ -508,7 +508,7 @@ function InvoiceTemplate() {
           <span className="inv-group">
             <Line value={data.invoiceLabel} onChange={(v) => set("invoiceLabel", v)} bold className="tight" />
             <span> </span>
-            <Line value={data.invoiceNumber} onChange={(v) => set("invoiceNumber", v)} />
+            <Line value={data.invoiceNumber} onChange={(v) => set("invoiceNumber", v)} className="tight" />
           </span>
           <span className="inv-group">
             <b>CLIENT: </b>
