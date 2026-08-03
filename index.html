@@ -204,9 +204,15 @@ function InvoiceTemplate() {
   }));
   const dragRef = useRef(null);
   const [draggingId, setDraggingId] = useState(null);
-  const onImageMouseMove = e => {
+
+  // Pointer Events unify mouse, trackpad, touch and pen so dragging works the
+  // same way regardless of input device. Pointer capture keeps move/up events
+  // targeted at the element that started the drag even if the pointer moves
+  // outside its bounds mid-drag.
+  const onImagePointerMove = e => {
     const ds = dragRef.current;
-    if (!ds) return;
+    if (!ds || e.pointerId !== ds.pointerId) return;
+    e.preventDefault();
     const dx = (e.clientX - ds.startClientX) * ds.scale;
     const dy = (e.clientY - ds.startClientY) * ds.scale;
     const maxX = Math.max(0, PAGE_W - ds.width);
@@ -215,14 +221,17 @@ function InvoiceTemplate() {
     const newY = Math.min(maxY, Math.max(0, ds.origY + dy));
     setImagePos(ds.pageId, ds.imgId, newX, newY);
   };
-  const onImageMouseUp = () => {
+  const onImagePointerUp = e => {
+    const ds = dragRef.current;
+    if (!ds || e.pointerId !== ds.pointerId) return;
+    try {
+      e.currentTarget.releasePointerCapture(ds.pointerId);
+    } catch (err) {}
     dragRef.current = null;
     setDraggingId(null);
-    window.removeEventListener("mousemove", onImageMouseMove);
-    window.removeEventListener("mouseup", onImageMouseUp);
   };
-  const onImageMouseDown = (e, pageId, imgId, box) => {
-    if (e.button !== 0) return;
+  const onImagePointerDown = (e, pageId, imgId, box) => {
+    if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     const pageEl = pageRefs.current[pageId];
     if (!pageEl) return;
@@ -231,6 +240,7 @@ function InvoiceTemplate() {
     dragRef.current = {
       pageId,
       imgId,
+      pointerId: e.pointerId,
       startClientX: e.clientX,
       startClientY: e.clientY,
       origX: box.x,
@@ -239,8 +249,9 @@ function InvoiceTemplate() {
       scale
     };
     setDraggingId(imgId);
-    window.addEventListener("mousemove", onImageMouseMove);
-    window.addEventListener("mouseup", onImageMouseUp);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {}
   };
   const exportPDF = async () => {
     if (!window.html2canvas || !window.jspdf) return;
@@ -831,7 +842,10 @@ function InvoiceTemplate() {
         top: `${box.y}pt`,
         width: `${box.width}pt`
       },
-      onMouseDown: e => onImageMouseDown(e, page.id, img.id, box)
+      onPointerDown: e => onImagePointerDown(e, page.id, img.id, box),
+      onPointerMove: onImagePointerMove,
+      onPointerUp: onImagePointerUp,
+      onPointerCancel: onImagePointerUp
     }, /*#__PURE__*/React.createElement("img", {
       className: "page-image",
       src: img.src,
@@ -840,11 +854,11 @@ function InvoiceTemplate() {
     }), /*#__PURE__*/React.createElement("button", {
       className: "del-image",
       title: "Remove image",
-      onMouseDown: e => e.stopPropagation(),
+      onPointerDown: e => e.stopPropagation(),
       onClick: () => removeImage(page.id, img.id)
     }, "✕"), /*#__PURE__*/React.createElement("div", {
       className: "resize-control",
-      onMouseDown: e => e.stopPropagation()
+      onPointerDown: e => e.stopPropagation()
     }, /*#__PURE__*/React.createElement("input", {
       type: "range",
       min: IMG_MIN_W,
