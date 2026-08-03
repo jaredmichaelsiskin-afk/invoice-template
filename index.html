@@ -242,8 +242,16 @@ function InvoiceTemplate() {
     ...d,
     fields: [...d.fields, {
       id: "f" + Date.now(),
+      type: "field",
       label: "LABEL:",
       value: ""
+    }]
+  }));
+  const addDivider = () => setData(d => ({
+    ...d,
+    fields: [...d.fields, {
+      id: "d" + Date.now(),
+      type: "divider"
     }]
   }));
   const removeField = id => setData(d => ({
@@ -403,6 +411,35 @@ function InvoiceTemplate() {
         .row:hover .del { opacity: 1; }
         .row .label { font-weight: 700; }
 
+        .divider-row {
+          position: absolute;
+          left: 0;
+          width: 612pt;
+          height: 25pt;
+        }
+        .divider-row .divider-bar {
+          position: absolute;
+          left: 102pt;
+          top: 11pt;
+          width: 433pt;
+          height: 3pt;
+          background: #030405;
+        }
+        .divider-row .del {
+          position: absolute;
+          left: 80pt;
+          top: 6pt;
+          border: none;
+          background: none;
+          color: #c33;
+          cursor: pointer;
+          font-size: 11pt;
+          opacity: 0;
+          transition: opacity .15s;
+          padding: 0 3pt;
+        }
+        .divider-row:hover .del { opacity: 1; }
+
         .add-row {
           position: absolute;
           left: 102pt;
@@ -519,6 +556,9 @@ function InvoiceTemplate() {
     onClick: addField
   }, "+ Add line"), /*#__PURE__*/React.createElement("button", {
     className: "secondary",
+    onClick: addDivider
+  }, "+ Add divider"), /*#__PURE__*/React.createElement("button", {
+    className: "secondary",
     onClick: addPage
   }, "+ Add page"), /*#__PURE__*/React.createElement("button", {
     className: "secondary",
@@ -571,7 +611,19 @@ function InvoiceTemplate() {
     onChange: v => set("invoiceDate", v)
   }))), /*#__PURE__*/React.createElement("div", {
     className: "bar"
-  }), data.fields.map((f, i) => /*#__PURE__*/React.createElement("div", {
+  }), data.fields.map((f, i) => f.type === "divider" ? /*#__PURE__*/React.createElement("div", {
+    className: "divider-row",
+    key: f.id,
+    style: {
+      top: `${175 + i * 25}pt`
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "del",
+    title: "Remove divider",
+    onClick: () => removeField(f.id)
+  }, "✕"), /*#__PURE__*/React.createElement("div", {
+    className: "divider-bar"
+  })) : /*#__PURE__*/React.createElement("div", {
     className: "row",
     key: f.id,
     style: {
