@@ -113,6 +113,10 @@ function InvoiceTemplate() {
     pendingPageId.current = pageId;
     imageInputRef.current?.click();
   };
+  const IMG_MARGIN = 24;
+  const IMG_DEFAULT_W = 260;
+  const IMG_MIN_W = 72;
+  const IMG_MAX_W = PAGE_W - IMG_MARGIN * 2;
   const handleFilesSelected = e => {
     const files = Array.from(e.target.files || []);
     const pageId = pendingPageId.current;
@@ -121,13 +125,25 @@ function InvoiceTemplate() {
       reader.onload = () => {
         setData(d => ({
           ...d,
-          pages: (d.pages || []).map(p => p.id === pageId ? {
-            ...p,
-            images: [...p.images, {
-              id: "img" + Date.now() + Math.random(),
-              src: reader.result
-            }]
-          } : p)
+          pages: (d.pages || []).map(p => {
+            if (p.id !== pageId) return p;
+            const n = p.images.length;
+            const col = n % 2;
+            const row = Math.floor(n / 2);
+            const width = IMG_DEFAULT_W;
+            const x = IMG_MARGIN + col * (width + 20);
+            const y = IMG_MARGIN + row * 280;
+            return {
+              ...p,
+              images: [...p.images, {
+                id: "img" + Date.now() + Math.random(),
+                src: reader.result,
+                width,
+                x,
+                y
+              }]
+            };
+          })
         }));
       };
       reader.readAsDataURL(file);
@@ -141,16 +157,91 @@ function InvoiceTemplate() {
       images: p.images.filter(im => im.id !== imgId)
     } : p)
   }));
+
+  // Images saved before the resize/move feature only have a percentage `width`
+  // (0-100) and no x/y. Compute sane defaults for those on the fly.
+  const getImageBox = img => {
+    if (img.x !== undefined && img.y !== undefined) {
+      return {
+        x: img.x,
+        y: img.y,
+        width: img.width || IMG_DEFAULT_W
+      };
+    }
+    const width = Math.round((img.width || 100) / 100 * IMG_MAX_W);
+    return {
+      x: IMG_MARGIN,
+      y: IMG_MARGIN,
+      width
+    };
+  };
   const setImageWidth = (pageId, imgId, width) => setData(d => ({
+    ...d,
+    pages: (d.pages || []).map(p => p.id === pageId ? {
+      ...p,
+      images: p.images.map(im => {
+        if (im.id !== imgId) return im;
+        const box = getImageBox(im);
+        return {
+          ...im,
+          width: Number(width),
+          x: box.x,
+          y: box.y
+        };
+      })
+    } : p)
+  }));
+  const setImagePos = (pageId, imgId, x, y) => setData(d => ({
     ...d,
     pages: (d.pages || []).map(p => p.id === pageId ? {
       ...p,
       images: p.images.map(im => im.id === imgId ? {
         ...im,
-        width: Number(width)
+        x,
+        y
       } : im)
     } : p)
   }));
+  const dragRef = useRef(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const onImageMouseMove = e => {
+    const ds = dragRef.current;
+    if (!ds) return;
+    const dx = (e.clientX - ds.startClientX) * ds.scale;
+    const dy = (e.clientY - ds.startClientY) * ds.scale;
+    const maxX = Math.max(0, PAGE_W - ds.width);
+    const maxY = PAGE_H - 20;
+    const newX = Math.min(maxX, Math.max(0, ds.origX + dx));
+    const newY = Math.min(maxY, Math.max(0, ds.origY + dy));
+    setImagePos(ds.pageId, ds.imgId, newX, newY);
+  };
+  const onImageMouseUp = () => {
+    dragRef.current = null;
+    setDraggingId(null);
+    window.removeEventListener("mousemove", onImageMouseMove);
+    window.removeEventListener("mouseup", onImageMouseUp);
+  };
+  const onImageMouseDown = (e, pageId, imgId, box) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const pageEl = pageRefs.current[pageId];
+    if (!pageEl) return;
+    const rect = pageEl.getBoundingClientRect();
+    const scale = PAGE_W / rect.width;
+    dragRef.current = {
+      pageId,
+      imgId,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      origX: box.x,
+      origY: box.y,
+      width: box.width,
+      scale
+    };
+    setDraggingId(imgId);
+    window.addEventListener("mousemove", onImageMouseMove);
+    window.addEventListener("mouseup", onImageMouseUp);
+  };
   const exportPDF = async () => {
     if (!window.html2canvas || !window.jspdf) return;
     setExporting(true);
@@ -501,8 +592,14 @@ function InvoiceTemplate() {
           gap: 12pt;
           align-items: stretch;
         }
-        .page-image-wrap { position: relative; width: 100%; flex-shrink: 0; text-align: center; }
-        .page-image { height: auto; max-height: 700pt; display: inline-block; }
+        .page-image-wrap {
+          position: absolute;
+          cursor: move;
+          user-select: none;
+          touch-action: none;
+        }
+        .page-image-wrap.dragging { z-index: 50; opacity: 0.85; }
+        .page-image { width: 100%; height: auto; max-height: 700pt; display: block; }
         .del-image {
           position: absolute;
           top: 6pt;
@@ -534,6 +631,7 @@ function InvoiceTemplate() {
           border-radius: 12pt;
           opacity: 0;
           transition: opacity .15s;
+          cursor: default;
         }
         .page-image-wrap:hover .resize-control { opacity: 1; }
         .resize-control input[type="range"] { width: 100pt; cursor: pointer; }
@@ -543,6 +641,21 @@ function InvoiceTemplate() {
           min-width: 26pt;
           text-align: right;
         }
+        .move-hint {
+          position: absolute;
+          left: 50%;
+          bottom: 6pt;
+          transform: translateX(-50%);
+          color: #fff;
+          font-size: 7pt;
+          background: rgba(0,0,0,0.55);
+          padding: 2pt 6pt;
+          border-radius: 8pt;
+          opacity: 0;
+          transition: opacity .15s;
+          pointer-events: none;
+        }
+        .page-image-wrap:hover .move-hint { opacity: 1; }
         .empty-page-hint {
           color: #999;
           font-size: 11pt;
@@ -552,7 +665,7 @@ function InvoiceTemplate() {
 
         @media print {
           .app { background: #fff; padding: 0; }
-          .toolbar, .page-toolbar, .del, .add-row, .resize-control { display: none !important; }
+          .toolbar, .page-toolbar, .del, .add-row, .resize-control, .move-hint { display: none !important; }
           .sheet { box-shadow: none; }
           input:hover, textarea:hover, input:focus, textarea:focus {
             background: transparent; box-shadow: none;
@@ -563,6 +676,7 @@ function InvoiceTemplate() {
         .sheet.exporting .add-row,
         .sheet.exporting .del-image,
         .sheet.exporting .resize-control,
+        .sheet.exporting .move-hint,
         .sheet.exporting .empty-page-hint {
           display: none !important;
         }
@@ -707,31 +821,43 @@ function InvoiceTemplate() {
     ref: el => pageRefs.current[page.id] = el
   }, page.images.length === 0 && /*#__PURE__*/React.createElement("div", {
     className: "empty-page-hint"
-  }, "Add images with the button above"), page.images.map(img => /*#__PURE__*/React.createElement("div", {
-    className: "page-image-wrap",
-    key: img.id
-  }, /*#__PURE__*/React.createElement("img", {
-    className: "page-image",
-    src: img.src,
-    alt: "",
-    style: {
-      width: `${img.width || 100}%`
-    }
-  }), /*#__PURE__*/React.createElement("button", {
-    className: "del-image",
-    title: "Remove image",
-    onClick: () => removeImage(page.id, img.id)
-  }, "✕"), /*#__PURE__*/React.createElement("div", {
-    className: "resize-control"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "range",
-    min: "20",
-    max: "100",
-    value: img.width || 100,
-    onChange: e => setImageWidth(page.id, img.id, e.target.value)
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "resize-label"
-  }, img.width || 100, "%"))))))));
+  }, "Add images with the button above"), page.images.map(img => {
+    const box = getImageBox(img);
+    return /*#__PURE__*/React.createElement("div", {
+      className: `page-image-wrap${draggingId === img.id ? " dragging" : ""}`,
+      key: img.id,
+      style: {
+        left: `${box.x}pt`,
+        top: `${box.y}pt`,
+        width: `${box.width}pt`
+      },
+      onMouseDown: e => onImageMouseDown(e, page.id, img.id, box)
+    }, /*#__PURE__*/React.createElement("img", {
+      className: "page-image",
+      src: img.src,
+      alt: "",
+      draggable: false
+    }), /*#__PURE__*/React.createElement("button", {
+      className: "del-image",
+      title: "Remove image",
+      onMouseDown: e => e.stopPropagation(),
+      onClick: () => removeImage(page.id, img.id)
+    }, "✕"), /*#__PURE__*/React.createElement("div", {
+      className: "resize-control",
+      onMouseDown: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "range",
+      min: IMG_MIN_W,
+      max: IMG_MAX_W,
+      step: "4",
+      value: box.width,
+      onChange: e => setImageWidth(page.id, img.id, e.target.value)
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "resize-label"
+    }, Math.round(box.width / PAGE_W * 100), "%")), /*#__PURE__*/React.createElement("div", {
+      className: "move-hint"
+    }, "drag to move"));
+  })))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(InvoiceTemplate, null));
 </script>
