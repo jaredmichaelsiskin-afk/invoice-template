@@ -141,6 +141,16 @@ function InvoiceTemplate() {
       images: p.images.filter(im => im.id !== imgId)
     } : p)
   }));
+  const setImageWidth = (pageId, imgId, width) => setData(d => ({
+    ...d,
+    pages: (d.pages || []).map(p => p.id === pageId ? {
+      ...p,
+      images: p.images.map(im => im.id === imgId ? {
+        ...im,
+        width: Number(width)
+      } : im)
+    } : p)
+  }));
   const exportPDF = async () => {
     if (!window.html2canvas || !window.jspdf) return;
     setExporting(true);
@@ -491,8 +501,8 @@ function InvoiceTemplate() {
           gap: 12pt;
           align-items: stretch;
         }
-        .page-image-wrap { position: relative; width: 100%; flex-shrink: 0; }
-        .page-image { width: 100%; height: auto; display: block; }
+        .page-image-wrap { position: relative; width: 100%; flex-shrink: 0; text-align: center; }
+        .page-image { height: auto; display: inline-block; }
         .del-image {
           position: absolute;
           top: 6pt;
@@ -511,6 +521,28 @@ function InvoiceTemplate() {
           padding: 0;
         }
         .page-image-wrap:hover .del-image { opacity: 1; }
+        .resize-control {
+          position: absolute;
+          left: 50%;
+          bottom: 6pt;
+          transform: translateX(-50%);
+          display: flex;
+          align-items: center;
+          gap: 6pt;
+          background: rgba(0,0,0,0.65);
+          padding: 4pt 10pt;
+          border-radius: 12pt;
+          opacity: 0;
+          transition: opacity .15s;
+        }
+        .page-image-wrap:hover .resize-control { opacity: 1; }
+        .resize-control input[type="range"] { width: 100pt; cursor: pointer; }
+        .resize-control .resize-label {
+          color: #fff;
+          font-size: 8pt;
+          min-width: 26pt;
+          text-align: right;
+        }
         .empty-page-hint {
           color: #999;
           font-size: 11pt;
@@ -520,7 +552,7 @@ function InvoiceTemplate() {
 
         @media print {
           .app { background: #fff; padding: 0; }
-          .toolbar, .page-toolbar, .del, .add-row { display: none !important; }
+          .toolbar, .page-toolbar, .del, .add-row, .resize-control { display: none !important; }
           .sheet { box-shadow: none; }
           input:hover, textarea:hover, input:focus, textarea:focus {
             background: transparent; box-shadow: none;
@@ -530,6 +562,7 @@ function InvoiceTemplate() {
         .sheet.exporting .del,
         .sheet.exporting .add-row,
         .sheet.exporting .del-image,
+        .sheet.exporting .resize-control,
         .sheet.exporting .empty-page-hint {
           display: none !important;
         }
@@ -680,12 +713,25 @@ function InvoiceTemplate() {
   }, /*#__PURE__*/React.createElement("img", {
     className: "page-image",
     src: img.src,
-    alt: ""
+    alt: "",
+    style: {
+      width: `${img.width || 100}%`
+    }
   }), /*#__PURE__*/React.createElement("button", {
     className: "del-image",
     title: "Remove image",
     onClick: () => removeImage(page.id, img.id)
-  }, "✕")))))));
+  }, "✕"), /*#__PURE__*/React.createElement("div", {
+    className: "resize-control"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "range",
+    min: "20",
+    max: "100",
+    value: img.width || 100,
+    onChange: e => setImageWidth(page.id, img.id, e.target.value)
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "resize-label"
+  }, img.width || 100, "%"))))))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(InvoiceTemplate, null));
 </script>
