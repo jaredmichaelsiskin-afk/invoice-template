@@ -273,9 +273,9 @@ function InvoiceTemplate() {
           backgroundColor: "#ffffff",
           useCORS: true
         });
-        const imgData = canvas.toDataURL("image/png");
+        const imgData = canvas.toDataURL("image/jpeg", 0.7);
         if (i > 0) pdf.addPage([PAGE_W, PAGE_H]);
-        pdf.addImage(imgData, "PNG", 0, 0, PAGE_W, PAGE_H);
+        pdf.addImage(imgData, "JPEG", 0, 0, PAGE_W, PAGE_H);
       }
       const suggestedName = `invoice-${data.invoiceNumber || "export"}.pdf`;
       if (window.showSaveFilePicker) {
